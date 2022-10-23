@@ -2,14 +2,14 @@ import requests, re, socket, json, time
 from errors import *
 from json.decoder import JSONDecodeError
 
-class Chat:
-    def __init__(self, chat, title, duration):
-        self.chat = chat
-        self.title = title
-        self.duration = duration
 
-        self._output_writer = None
-        self._output_callback = None
+class Chat:
+    def __init__(self, chat, vod_id, title, game, streamer):
+        self.chat = chat
+        self.vod_id = vod_id
+        self.title = title
+        self.game = game
+        self.streamer = streamer
 
     def __iter__(self):
         return self
@@ -20,6 +20,7 @@ class Chat:
             return msgs
         except StopIteration:
             raise StopIteration
+
 
 class ChatGenerator:
     _valid_url_regex = '(?x) https?://' \
@@ -50,13 +51,13 @@ class ChatGenerator:
         self.session = requests.session()
         pass
 
-    def is_valid_url(self, url):
+    def is_valid_url(self, url: str):
         match = None
         if isinstance(url, str):
             match = re.search(self._valid_url_regex, url)
         return match
 
-    def return_gql_operation(self, video_id):
+    def _get_video_data(self, video_id: str):
         gql_op = {'operationName': 'VideoMetadata',
                   'variables': {
                       'channelLogin': '',
@@ -67,13 +68,13 @@ class ChatGenerator:
                 'sha256Hash': self._operation_hashes[gql_op['operationName']]}}
         return self.session.post(self._gql_api_url, json=gql_op, headers=self._gql_api_headers).json()
 
-    def _return_data_dict(self, comment_dict) -> dict:
+    def _return_data_dict(self, comment_dict: dict) -> dict:
         return {'time': comment_dict['content_offset_seconds'],
                 'msg': comment_dict['message']['body'].lower(),
                 'commenter': comment_dict['commenter']['display_name'],
                 'commenter_id': comment_dict['commenter']['_id']}
 
-    def _return_chat(self, vod_id:str, end_time:int):
+    def _return_chat(self, vod_id: str, end_time: int) -> dict:
         cursor, content_offset = '', 0
 
         while 1:
@@ -90,13 +91,13 @@ class ChatGenerator:
                     raise CommentsNotFound('No Comments Found')
 
             for comment in comments['comments']:
-                #_comment_dict = {'time', 'comment, commenter, commenter_id}
+                # _comment_dict = {'time', 'comment, commenter, commenter_id}
                 comment_relevant_info = self._return_data_dict(comment)
                 comment_time = comment_relevant_info.get('time')
                 if comment_time is not None:
                     if comment_time < 0:
                         continue
-                    elif comment_time < 0:
+                    elif comment_time > end_time:
                         return
                 yield comment_relevant_info
 
@@ -109,21 +110,12 @@ class ChatGenerator:
         if url_match is None:
             raise InvalidURL('Invalid URL, check that its correct.')
         vod_id = url_match.string[url_match.regs[1][0]:url_match.regs[1][1]]
-        video = self.return_gql_operation(vod_id)['data']['video']
+        video = self._get_video_data(vod_id)['data']['video']
+
         if not video:
             raise VideoUnavailable(
                 "Sorry. Unless you've got a time machine, that content is unavailable.")
-        duration, title = video.get('lengthSeconds'), video.get('title')
-        return Chat(self._return_chat(vod_id, duration), title, duration)
+        duration, video_title = video.get('lengthSeconds'), video.get('title')
+        game, streamer = video['game'].get('name').lower(), video['owner'].get('displayName').lower()
 
-
-
-
-
-if __name__ == '__main__':
-    vod_url = 'https://www.twitch.tv/videos/1611458439'
-    chat = ChatGenerator().return_chat(vod_url)
-    for msg in chat:
-        print(msg['msg'])
-
-    print('b')
+        return Chat(self._return_chat(vod_id, duration), vod_id, video_title, game, streamer)

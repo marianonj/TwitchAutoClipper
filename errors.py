@@ -9,3 +9,6 @@ class VideoUnavailable(Error):
 
 class CommentsNotFound(Error):
     pass
+
+class AudioDownloadError(Error):
+    pass

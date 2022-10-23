@@ -27,6 +27,7 @@ def main():
 
     for url in urls:
         chat = ChatGenerator().return_chat(url)
+        a = chat.streamer
         frequency_data, chat_data = return_data_sample(5, chat)
         np.save('data_test.npy', frequency_data)
         with open('panda_test.pickle', 'wb') as f:
@@ -34,6 +35,8 @@ def main():
 
 
 def return_data_sample(data_bucket_seconds, chat_object):
+
+
     data_arr_length = chat_object.duration // data_bucket_seconds
     if (chat_object.duration % data_bucket_seconds) != 0:
         data_arr_length += 1
