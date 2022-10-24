@@ -4,12 +4,13 @@ from json.decoder import JSONDecodeError
 
 
 class Chat:
-    def __init__(self, chat, vod_id, title, game, streamer):
+    def __init__(self, chat, vod_id, title, game, streamer, duration):
         self.chat = chat
         self.vod_id = vod_id
         self.title = title
         self.game = game
         self.streamer = streamer
+        self.duration = duration
 
     def __iter__(self):
         return self
@@ -70,7 +71,7 @@ class ChatGenerator:
 
     def _return_data_dict(self, comment_dict: dict) -> dict:
         return {'time': comment_dict['content_offset_seconds'],
-                'msg': comment_dict['message']['body'].lower(),
+                'msg': comment_dict['message']['body'].strip().lower(),
                 'commenter': comment_dict['commenter']['display_name'],
                 'commenter_id': comment_dict['commenter']['_id']}
 
@@ -118,4 +119,4 @@ class ChatGenerator:
         duration, video_title = video.get('lengthSeconds'), video.get('title')
         game, streamer = video['game'].get('name').lower(), video['owner'].get('displayName').lower()
 
-        return Chat(self._return_chat(vod_id, duration), vod_id, video_title, game, streamer)
+        return Chat(self._return_chat(vod_id, duration), vod_id, video_title, game, streamer, duration)
