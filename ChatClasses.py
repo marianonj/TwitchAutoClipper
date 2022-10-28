@@ -1,5 +1,5 @@
 import requests, re, socket, json, time
-from errors import *
+from Errors import *
 from json.decoder import JSONDecodeError
 
 

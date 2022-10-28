@@ -6,7 +6,7 @@ from datetime import date
 
 import ChatClasses
 import Dir
-import errors
+import Errors
 
 
 def get_time_str(seconds):
@@ -25,7 +25,7 @@ def audio_process_child(vod_id, test_audio, time_stamps_mp, max_time_stamp_count
         return_audio_time_markers(test_audio, max_time_stamp_count, time_stamp_p_value)
     else:
         time_stamps_mp[-1] = -1
-        raise errors.AudioDownloadError(f'Audio failed to download for vod_id <{vod_id}>')
+        raise Errors.AudioDownloadError(f'Audio failed to download for vod_id <{vod_id}>')
 
 
 def get_audio_process():

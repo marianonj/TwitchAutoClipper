@@ -137,7 +137,7 @@ def set_clip_timings(timing_view, frequency_array, bucket_seconds, max_clip_coun
             selected_time_idxs = np.sort(np.unique(np.hstack((selected_time_idxs, np.arange(selected_idx - 1, selected_idx + 2)))))
             count = np.count_nonzero(np.abs(np.diff(selected_time_idxs)) > 1)
 
-        if np.all(current_arr_idxs == frequency_q25.shape[0]):
+        if np.all(current_arr_idxs == frequency_q25.shape[0] - 1):
             break
 
     selected_time_idxs = selected_time_idxs[np.logical_and(np.argwhere(selected_time_idxs > 0).flatten(), np.argwhere(selected_time_idxs < q25_cutoff_idxs[-1]).flatten())]
