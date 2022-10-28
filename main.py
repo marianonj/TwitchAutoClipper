@@ -19,6 +19,7 @@ class MpIdxs(Enum):
     text_length = 1
     text_analyzed_start_i = 2
 
+
 class CTypeSharedArray:
     data_type_conversion = {
         'b': np.int8,
@@ -112,22 +113,22 @@ def set_string_comparisons_dict(directory: str, comparison_dict: dict):
 
 
 def set_clip_timings(timing_view, frequency_array, bucket_seconds, max_clip_count):
-    #WIP - Trying to determine best algo for finding clips
+    # WIP - Trying to determine best algo for finding clips
     frequency_array = frequency_array.T
     q25_cutoff_idxs = np.argwhere(frequency_array[0] > np.percentile(frequency_array[0], 25)).flatten()
     frequency_q25 = frequency_array[0:, q25_cutoff_idxs]
     sort_idxs = np.vstack(([np.argsort(frequency_q25[row_i])[::-1] for row_i in range(1, frequency_q25.shape[0])]))
     current_idxs = np.column_stack((np.arange(0, sort_idxs.shape[0]), np.zeros(sort_idxs.shape[0], dtype=np.uint16)))
-    count = 0
-    selected_time_idxs = None
 
+    count, selected_time_idxs = 0, None
     while count < max_clip_count:
+        print(count)
         current_arr_idxs = sort_idxs[current_idxs[:, 0], current_idxs[:, 1]]
         proportion = frequency_q25[current_idxs[:, 0] + 1, current_arr_idxs] / frequency_q25[0][current_arr_idxs]
         max_proportion_i = np.argmax(proportion)
 
-        if current_idxs[max_proportion_i, 1] != frequency_q25.shape[0] - 1:
-            current_idxs[max_proportion_i, 1] +=1
+        if current_idxs[max_proportion_i, 1] != frequency_q25.shape[1] - 1:
+            current_idxs[max_proportion_i, 1] += 1
 
         selected_idx = q25_cutoff_idxs[current_arr_idxs[max_proportion_i]]
         if selected_time_idxs is None:
@@ -215,18 +216,17 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
             child_comm.view[MpIdxs.text_array_idx.value] = int(msg['seconds'] // bucket_seconds)
             chat_frequency.view[int(msg['seconds'] // bucket_seconds), 0] += 1
             child_comm.clear(start_i=MpIdxs.text_analyzed_start_i.value)
-
             panda_dict = {
                 'seconds': msg['seconds'],
                 'msg': msg['msg'],
             }
             panda_data.append(panda_dict)
+
             while np.any(child_comm.view[MpIdxs.text_analyzed_start_i.value:] != 1):
                 pass
 
-        np.save('data_test.npy', chat_frequency.view.copy())
         save_panda_data(stream_data, panda_data)
-        set_clip_timings(timing_view, chat_frequency, bucket_seconds, max_clip_count)
+        set_clip_timings(timing_view, chat_frequency.view.copy(), bucket_seconds, max_clip_count)
         chat_analysis_finished.value = 1
         print(f'Chat analysis {i + 1} of {len(stream_data_all)} finished')
     print('Chat child exited')
@@ -237,13 +237,13 @@ def get_subprocess_stream_dict(urls) -> (list, list, list):
     stream_data_dict = {}
     for stream_data in stream_data_all:
         stream_data_dict[stream_data.vod_id] = {'streamer': stream_data.streamer, 'title': stream_data.title,
-                                               'game': stream_data.game}
+                                                'game': stream_data.game}
 
     return stream_data_dict
 
 
 def main():
-    max_clip_count, bucket_size = 16, 15
+    max_clip_count, seconds_per_bucket = 16, 15
     urls = []
     streamer_params, game_params = os.listdir(Dir.streamer_params)[1:], os.listdir(Dir.game_params)[1:]
 
@@ -255,15 +255,14 @@ def main():
     stream_data = get_subprocess_stream_dict(urls)
     clip_timings = CTypeSharedArray('H', max_clip_count * 2, view_shape=(max_clip_count, 2))
 
-    download_child = Process(target=download_child_process, args=(clip_timings.mp, stream_data, chat_analysis_finished, editing_finished, max_clip_count))
-    analysis_child = Process(target=chat_analysis_process, args=(urls, clip_timings.mp, game_params, streamer_params, chat_analysis_finished, max_clip_count, bucket_size))
+    download_child = Process(target=download_child_process, args=(clip_timings.mp, stream_data, chat_analysis_finished, editing_finished, max_clip_count, seconds_per_bucket))
+    analysis_child = Process(target=chat_analysis_process, args=(urls, clip_timings.mp, game_params, streamer_params, chat_analysis_finished, max_clip_count, seconds_per_bucket))
 
     for p in (analysis_child, download_child):
         p.start()
 
     for p in (analysis_child, download_child):
         p.join()
-
 
     '''for url in urls:
         chat = ChatGenerator().return_stream_data(url)
