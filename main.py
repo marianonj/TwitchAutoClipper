@@ -112,6 +112,8 @@ def set_string_comparisons_dict(directory: str, comparison_dict: dict):
 
 
 def set_clip_timings(timing_view, frequency_array, bucket_seconds, max_clip_count):
+    #WIP - Trying to determine best algo for finding clips
+    frequency_array = frequency_array.T
     q25_cutoff_idxs = np.argwhere(frequency_array[0] > np.percentile(frequency_array[0], 25)).flatten()
     frequency_q25 = frequency_array[0:, q25_cutoff_idxs]
     sort_idxs = np.vstack(([np.argsort(frequency_q25[row_i])[::-1] for row_i in range(1, frequency_q25.shape[0])]))
@@ -123,13 +125,19 @@ def set_clip_timings(timing_view, frequency_array, bucket_seconds, max_clip_coun
         current_arr_idxs = sort_idxs[current_idxs[:, 0], current_idxs[:, 1]]
         proportion = frequency_q25[current_idxs[:, 0] + 1, current_arr_idxs] / frequency_q25[0][current_arr_idxs]
         max_proportion_i = np.argmax(proportion)
-        current_idxs[max_proportion_i, 1] += 1
+
+        if current_idxs[max_proportion_i, 1] != frequency_q25.shape[0] - 1:
+            current_idxs[max_proportion_i, 1] +=1
+
         selected_idx = q25_cutoff_idxs[current_arr_idxs[max_proportion_i]]
         if selected_time_idxs is None:
-            selected_time_idxs = np.arange(selected_idx - 2, selected_idx + 1).astype(np.uint16)
+            selected_time_idxs = np.arange(selected_idx - 1, selected_idx + 2).astype(np.uint16)
         else:
-            selected_time_idxs = np.sort(np.unique(np.hstack((selected_time_idxs, np.arange(selected_idx - 2, selected_idx + 2)))))
+            selected_time_idxs = np.sort(np.unique(np.hstack((selected_time_idxs, np.arange(selected_idx - 1, selected_idx + 2)))))
             count = np.count_nonzero(np.abs(np.diff(selected_time_idxs)) > 1)
+
+        if np.all(current_arr_idxs == frequency_q25.shape[0]):
+            break
 
     selected_time_idxs = selected_time_idxs[np.logical_and(np.argwhere(selected_time_idxs > 0).flatten(), np.argwhere(selected_time_idxs < q25_cutoff_idxs[-1]).flatten())]
     end_is = np.argwhere(np.diff(selected_time_idxs) > 1).flatten()
@@ -171,11 +179,12 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
     comparison_strs_common = {}
     set_string_comparisons_dict(Dir.common_params, comparison_strs_common)
     for i, stream_data in enumerate(stream_data_all):
-        print(f'Chat analysis {i} of {i / len(stream_data_all)} started')
+        print(f'Chat analysis {i + 1} of {len(stream_data_all)} started')
         # Awaits download child to copy the timings and then set the value back to 0
         while chat_analysis_finished.value == 1:
             pass
 
+        timing_view[0:] = 0
         comparison_strings = comparison_strs_common.copy()
         for param_value, params, directory in zip((stream_data.streamer, stream_data.game), (streamer_params, game_params), (Dir.streamer_params, Dir.game_params)):
             if param_value in params:
@@ -219,7 +228,7 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
         save_panda_data(stream_data, panda_data)
         set_clip_timings(timing_view, chat_frequency, bucket_seconds, max_clip_count)
         chat_analysis_finished.value = 1
-        print(f'Chat analysis {i} of {i/ len(stream_data_all)} finished')
+        print(f'Chat analysis {i + 1} of {len(stream_data_all)} finished')
     print('Chat child exited')
 
 
@@ -235,7 +244,6 @@ def get_subprocess_stream_dict(urls) -> (list, list, list):
 
 def main():
     max_clip_count, bucket_size = 16, 15
-
     urls = []
     streamer_params, game_params = os.listdir(Dir.streamer_params)[1:], os.listdir(Dir.game_params)[1:]
 

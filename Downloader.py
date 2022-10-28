@@ -71,22 +71,21 @@ def download_child_process(clip_timings_mp, stream_data, chat_analysis_finished,
     timing_view = np.ndarray((max_clip_count, 2), dtype=np.uint16, buffer=clip_timings_mp._obj)
 
     for i, vod_id in enumerate(stream_data.keys()):
-        print(f'Download {i} of {i / len(stream_data)} started')
-        print(vod_id)
         while chat_analysis_finished.value == 0:
             pass
+        print(f'Download {i + 1} of {len(stream_data)} started')
         timing_copy = timing_view.copy()
         chat_analysis_finished.value = 1
 
         path = f'{vod_path}/{stream_data[vod_id]["streamer"]}/{stream_data[vod_id]["title"]}'
 
-        for i, time in enumerate(timing_copy):
+        for clip_i, time in enumerate(timing_copy):
             print(time)
             if np.all(time == 0):
                 print('break')
                 break
-            download_clip(get_time_str(time[0]), get_time_str(time[1]), path, vod_id, i)
-        print(f'Download {i} of {i/len(stream_data)} finished')
+            download_clip(get_time_str(time[0]), get_time_str(time[1]), path, vod_id, clip_i)
+        print(f'Download {i + 1} of {i/len(stream_data)} finished')
 
     print('Download child exited')
 
