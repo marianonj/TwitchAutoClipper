@@ -171,6 +171,7 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
     comparison_strs_common = {}
     set_string_comparisons_dict(Dir.common_params, comparison_strs_common)
     for i, stream_data in enumerate(stream_data_all):
+        print(f'Chat analysis {i} of {i / len(stream_data_all)} started')
         # Awaits download child to copy the timings and then set the value back to 0
         while chat_analysis_finished.value == 1:
             pass
@@ -218,8 +219,8 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
         save_panda_data(stream_data, panda_data)
         set_clip_timings(timing_view, chat_frequency, bucket_seconds, max_clip_count)
         chat_analysis_finished.value = 1
-        print(f'Chat analysis {i / len(stream_data_all)} finished')
-    print('Chat analysis exited')
+        print(f'Chat analysis {i} of {i/ len(stream_data_all)} finished')
+    print('Chat child exited')
 
 
 def get_subprocess_stream_dict(urls) -> (list, list, list):
