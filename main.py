@@ -19,6 +19,55 @@ class MpIdxs(Enum):
     text_length = 1
     text_analyzed_start_i = 2
 
+class CTypeSharedArray:
+    data_type_conversion = {
+        'b': np.int8,
+        'B': np.uint8,
+        'h': np.int16,
+        'H': np.uint16,
+        'i': np.int16,
+        'I': np.uint16,
+        'l': np.int32,
+        'L': np.uint32,
+        'f': np.float32,
+        'd': np.float64
+    }
+
+    def __init__(self, data_type, length, view_shape=None, mp=None, order='C'):
+        self.data_type_mp = data_type
+        self.data_type_np = self.data_type_conversion[data_type]
+        self.mp = None
+
+        if mp is not None:
+            self.mp = mp
+        else:
+            self.mp = mpc.Array(data_type, length)
+
+        if view_shape is not None:
+            self.view = np.ndarray(view_shape, buffer=self.mp._obj, dtype=self.data_type_np, order=order)
+        else:
+            self.view = np.ndarray(length, buffer=self.mp._obj, dtype=self.data_type_np, order=order)
+        self.length = length
+
+    def clear(self, start_i=0, end_i=None):
+        if end_i is None:
+            end_i = self.length
+        length = end_i - start_i
+        if self.data_type_mp == 'u':
+            self.view[start_i:end_i] = ' ' * length
+        else:
+            self.view[start_i:end_i] = np.zeros(length, dtype=self.data_type_np)
+
+    def fill(self, value, start_i=0, end_i=None):
+        if end_i is None:
+            end_i = self.length
+
+        length = end_i - start_i
+        if isinstance(value, str):
+            self.mp[0:self.length] = value * (length // len(str))
+        else:
+            self.mp[start_i:end_i] = np.full(length, value, dtype=self.data_type_np)
+
 
 def return_timestamps(frequency_array, bin_size_seconds, desired_clip_count=8):
     data_np = np.load('data_test.npy')
@@ -121,7 +170,7 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
     stream_data_all = [ChatGenerator().return_stream_data(url) for url in urls]
     comparison_strs_common = {}
     set_string_comparisons_dict(Dir.common_params, comparison_strs_common)
-    for stream_data in stream_data_all:
+    for i, stream_data in enumerate(stream_data_all):
         # Awaits download child to copy the timings and then set the value back to 0
         while chat_analysis_finished.value == 1:
             pass
@@ -152,7 +201,6 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
             # Ignores Emojis
             except TypeError:
                 continue
-            print(msg['seconds'])
             child_comm.view[MpIdxs.text_length.value] = len(msg['msg'])
             child_comm.view[MpIdxs.text_array_idx.value] = int(msg['seconds'] // bucket_seconds)
             chat_frequency.view[int(msg['seconds'] // bucket_seconds), 0] += 1
@@ -170,57 +218,8 @@ def chat_analysis_process(urls, clip_timings_mp, game_params, streamer_params, c
         save_panda_data(stream_data, panda_data)
         set_clip_timings(timing_view, chat_frequency, bucket_seconds, max_clip_count)
         chat_analysis_finished.value = 1
-
-
-
-class CTypeSharedArray:
-    data_type_conversion = {
-        'b': np.int8,
-        'B': np.uint8,
-        'h': np.int16,
-        'H': np.uint16,
-        'i': np.int16,
-        'I': np.uint16,
-        'l': np.int32,
-        'L': np.uint32,
-        'f': np.float32,
-        'd': np.float64
-    }
-
-    def __init__(self, data_type, length, view_shape=None, mp=None, order='C'):
-        self.data_type_mp = data_type
-        self.data_type_np = self.data_type_conversion[data_type]
-        self.mp = None
-
-        if mp is not None:
-            self.mp = mp
-        else:
-            self.mp = mpc.Array(data_type, length)
-
-        if view_shape is not None:
-            self.view = np.ndarray(view_shape, buffer=self.mp._obj, dtype=self.data_type_np, order=order)
-        else:
-            self.view = np.ndarray(length, buffer=self.mp._obj, dtype=self.data_type_np, order=order)
-        self.length = length
-
-    def clear(self, start_i=0, end_i=None):
-        if end_i is None:
-            end_i = self.length
-        length = end_i - start_i
-        if self.data_type_mp == 'u':
-            self.view[start_i:end_i] = ' ' * length
-        else:
-            self.view[start_i:end_i] = np.zeros(length, dtype=self.data_type_np)
-
-    def fill(self, value, start_i=0, end_i=None):
-        if end_i is None:
-            end_i = self.length
-
-        length = end_i - start_i
-        if isinstance(value, str):
-            self.mp[0:self.length] = value * (length // len(str))
-        else:
-            self.mp[start_i:end_i] = np.full(length, value, dtype=self.data_type_np)
+        print(f'Chat analysis {i / len(stream_data_all)} finished')
+    print('Chat analysis exited')
 
 
 def get_subprocess_stream_dict(urls) -> (list, list, list):
